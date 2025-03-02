@@ -1,20 +1,27 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@apollo/client";
+import { useQuery, gql } from "@apollo/client";
 import { useAccount } from "wagmi";
-import { getWalletClient } from "@wagmi/core"; // ✅ Correct replacement for useSigner
+import { getWalletClient } from "@wagmi/core"; // ✅ Corrected import
 import { placeBet } from "../lib/contracts";
 import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries.js";
 
 export default function Home() {
-    const { address } = useAccount();
+    const { address, isConnected } = useAccount();
     const [signer, setSigner] = useState(null);
     const [betting, setBetting] = useState(false);
     const [market, setMarket] = useState(null);
+    const [clientReady, setClientReady] = useState(false);
 
-    // ✅ Fetch signer (wallet client) properly using wagmi/core
+    // ✅ Ensure Apollo runs only on the client
+    useEffect(() => {
+        setClientReady(true);
+    }, []);
+
+    // ✅ Fetch signer properly using wagmi/core
     useEffect(() => {
         async function fetchSigner() {
             try {
+                if (!isConnected) return;
                 const walletClient = await getWalletClient();
                 setSigner(walletClient);
             } catch (error) {
@@ -22,12 +29,11 @@ export default function Home() {
             }
         }
         fetchSigner();
-    }, []);
+    }, [isConnected]);
 
-    // ✅ Apollo useQuery - Prevents Next.js SSR pre-render error
+    // ✅ Only run Apollo query on client to avoid SSR issues
     const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { 
-        skip: typeof window === "undefined" || !address,
-        ssr: false  // ✅ Ensures Apollo runs only on the client
+        skip: !clientReady || !address // Prevents Next.js from running this on the server
     });
 
     // ✅ Set the betting market when data is available
@@ -53,7 +59,8 @@ export default function Home() {
         setBetting(false);
     }
 
-    // ✅ Display loading, error, or no market states
+    // ✅ Prevent rendering if Apollo is still setting up
+    if (!clientReady) return <p>Loading...</p>;
     if (loading) return <p>Loading daily bet...</p>;
     if (error) return <p>Error loading market data</p>;
     if (!market) return <p>No available betting markets</p>;
@@ -71,4 +78,3 @@ export default function Home() {
         </div>
     );
 }
-
