@@ -1,17 +1,28 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { useAccount, useSigner } from "wagmi";
+import { useAccount } from "wagmi";
+import { getWalletClient } from "@wagmi/core";
 import { placeBet } from "../lib/contracts";
 import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries.js";
 
 export default function Home() {
     const { address } = useAccount();
-    const { data: signer } = useSigner();
+    const [signer, setSigner] = useState(null);
+
+useEffect(() => {
+    async function fetchSigner() {
+        const walletClient = await getWalletClient();
+        setSigner(walletClient);
+    }
+    fetchSigner();
+}, []);
+
     const [betting, setBetting] = useState(false);
     const [market, setMarket] = useState(null);
 
     // Fetch market data but only on client-side (to prevent Next.js pre-render error)
-    const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { skip: typeof window === "undefined" });
+    const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { skip: typeof window === "undefined" || !address });
+
 
     useEffect(() => {
         if (!loading && !error && data?.sportsMarkets?.length > 0) {
