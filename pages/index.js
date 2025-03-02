@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@apollo/client";
 import { useAccount, useSigner } from "wagmi";
 import { placeBet } from "../lib/contracts";
-import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries";
+import { GET_TOP_LIQUIDITY_MARKET } from "@/lib/queries";
+";
 
 export default function Home() {
   const { data, loading } = useQuery(GET_TOP_LIQUIDITY_MARKET);
