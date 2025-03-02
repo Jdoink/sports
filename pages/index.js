@@ -1,35 +1,43 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
 import { useAccount } from "wagmi";
-import { getWalletClient } from "@wagmi/core";
+import { getWalletClient } from "@wagmi/core"; // ✅ Correct replacement for useSigner
 import { placeBet } from "../lib/contracts";
 import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries.js";
 
 export default function Home() {
     const { address } = useAccount();
     const [signer, setSigner] = useState(null);
-
-useEffect(() => {
-    async function fetchSigner() {
-        const walletClient = await getWalletClient();
-        setSigner(walletClient);
-    }
-    fetchSigner();
-}, []);
-
     const [betting, setBetting] = useState(false);
     const [market, setMarket] = useState(null);
 
-    // Fetch market data but only on client-side (to prevent Next.js pre-render error)
-    const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { skip: typeof window === "undefined" || !address });
+    // ✅ Fetch signer (wallet client) properly using wagmi/core
+    useEffect(() => {
+        async function fetchSigner() {
+            try {
+                const walletClient = await getWalletClient();
+                setSigner(walletClient);
+            } catch (error) {
+                console.error("Failed to fetch signer:", error);
+            }
+        }
+        fetchSigner();
+    }, []);
 
+    // ✅ Apollo useQuery - Prevents Next.js SSR pre-render error
+    const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { 
+        skip: typeof window === "undefined" || !address,
+        ssr: false  // ✅ Ensures Apollo runs only on the client
+    });
 
+    // ✅ Set the betting market when data is available
     useEffect(() => {
         if (!loading && !error && data?.sportsMarkets?.length > 0) {
-            setMarket(data.sportsMarkets[0]); // Set the first market with highest liquidity
+            setMarket(data.sportsMarkets[0]); // Set first market with highest liquidity
         }
     }, [loading, error, data]);
 
+    // ✅ Function to handle bet placement
     async function handleBet(team) {
         if (!signer) return alert("Connect your wallet first!");
         if (!market) return alert("No market data available!");
@@ -45,6 +53,7 @@ useEffect(() => {
         setBetting(false);
     }
 
+    // ✅ Display loading, error, or no market states
     if (loading) return <p>Loading daily bet...</p>;
     if (error) return <p>Error loading market data</p>;
     if (!market) return <p>No available betting markets</p>;
@@ -62,3 +71,4 @@ useEffect(() => {
         </div>
     );
 }
+
