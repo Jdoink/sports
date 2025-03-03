@@ -6,14 +6,22 @@ import { fetchNBAMarket } from "../lib/queries";
 export default function Home() {
     const { address, isConnected } = useAccount();
     const [market, setMarket] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [betting, setBetting] = useState(false);
 
-    // Fetch a single NBA market on load
     useEffect(() => {
         async function getMarket() {
-            const nbaMarket = await fetchNBAMarket();
-            if (nbaMarket) {
-                setMarket(nbaMarket);
+            try {
+                const nbaMarket = await fetchNBAMarket();
+                if (nbaMarket) {
+                    setMarket(nbaMarket);
+                } else {
+                    throw new Error("No NBA market found.");
+                }
+            } catch (error) {
+                console.error(error.message);
+            } finally {
+                setLoading(false);
             }
         }
         getMarket();
@@ -34,7 +42,8 @@ export default function Home() {
         setBetting(false);
     }
 
-    if (!market) return <p>Loading NBA market...</p>;
+    if (loading) return <p>Loading NBA market...</p>;
+    if (!market) return <p>No NBA markets available.</p>;
 
     return (
         <div>
