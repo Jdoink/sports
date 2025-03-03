@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
-import { useQuery, gql } from "@apollo/client";
+import { useQuery } from "@apollo/client";
 import { useAccount } from "wagmi";
-import { getWalletClient } from "@wagmi/core"; // ✅ Use this instead of `useSigner`
+import { getWalletClient } from "@wagmi/core";
 import { placeBet } from "../lib/contracts";
-import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries.js";
+import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries";
 
 export default function Home() {
     const { address, isConnected } = useAccount();
     const [signer, setSigner] = useState(null);
     const [betting, setBetting] = useState(false);
     const [market, setMarket] = useState(null);
+    const [clientReady, setClientReady] = useState(false);
 
-    // ✅ Fetch signer (wallet client) properly
+    // ✅ Ensure Apollo runs only on the client
+    useEffect(() => {
+        setClientReady(true);
+    }, []);
+
+    // ✅ Fetch signer properly using wagmi/core
     useEffect(() => {
         async function fetchSigner() {
             if (!isConnected) return;
@@ -25,20 +31,19 @@ export default function Home() {
         fetchSigner();
     }, [isConnected]);
 
-    // ✅ Apollo useQuery - Prevents Next.js SSR pre-render error
+    // ✅ Fetch market data (GraphQL)
     const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { 
-        skip: typeof window === "undefined" || !address,
-        ssr: false  // ✅ Ensures Apollo runs only on the client
+        skip: !clientReady || !address // ✅ Prevents Next.js pre-render error
     });
 
     // ✅ Set the betting market when data is available
     useEffect(() => {
         if (!loading && !error && data?.sportsMarkets?.length > 0) {
-            setMarket(data.sportsMarkets[0]); // Set first market with highest liquidity
+            setMarket(data.sportsMarkets[0]);
         }
     }, [loading, error, data]);
 
-    // ✅ Function to handle bet placement
+    // ✅ Function to place a bet
     async function handleBet(team) {
         if (!signer) return alert("Connect your wallet first!");
         if (!market) return alert("No market data available!");
@@ -54,7 +59,8 @@ export default function Home() {
         setBetting(false);
     }
 
-    // ✅ Display loading, error, or no market states
+    // ✅ Show loading/error messages
+    if (!clientReady) return <p>Loading...</p>;
     if (loading) return <p>Loading daily bet...</p>;
     if (error) return <p>Error loading market data</p>;
     if (!market) return <p>No available betting markets</p>;
