@@ -6,21 +6,28 @@ export default function Home() {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        async function fetchNBAMarket() {
+        async function fetchMarkets() {
             try {
-                const response = await fetch("https://overtimemarketsv2.xyz/overtime-v2/networks/10/markets?sport=Basketball&league=NBA");
-                
+                // ✅ Correct API request to fetch NBA markets on Optimism
+                const response = await fetch(
+                    "https://overtimemarketsv2.xyz/overtime-v2/networks/10/markets?sport=Basketball&league=NBA"
+                );
+
                 if (!response.ok) {
-                    throw new Error(`API responded with status: ${response.status}`);
+                    throw new Error(`API error: ${response.status} ${response.statusText}`);
                 }
 
                 const data = await response.json();
 
-                if (data.length > 0) {
-                    setMarket(data[0]); // Just take the first available NBA game
-                } else {
-                    throw new Error("No NBA markets found.");
+                // ✅ Ensure there is at least one NBA game
+                if (data.length === 0) {
+                    throw new Error("No NBA games found.");
                 }
+
+                // ✅ Pick a random NBA game from the list
+                const randomMarket = data[Math.floor(Math.random() * data.length)];
+
+                setMarket(randomMarket);
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -28,7 +35,7 @@ export default function Home() {
             }
         }
 
-        fetchNBAMarket();
+        fetchMarkets();
     }, []);
 
     if (loading) return <p>Loading NBA market...</p>;
@@ -39,7 +46,7 @@ export default function Home() {
         <div>
             <h1>Random NBA Game Bet</h1>
             <p>Match: {market.homeTeam} vs {market.awayTeam}</p>
-            <p>Maturity Date: {new Date(market.maturity * 1000).toLocaleString()}</p>
+            <p>Maturity Date: {new Date(market.maturityDate * 1000).toLocaleString()}</p>
             <button onClick={() => alert(`Bet placed on ${market.homeTeam}`)}>
                 Bet on {market.homeTeam}
             </button>
