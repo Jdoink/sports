@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, gql } from "@apollo/client";
 import { useAccount } from "wagmi";
-import { getWalletClient } from "@wagmi/core"; // ✅ Corrected import
+import { getWalletClient } from "@wagmi/core"; // ✅ Use this instead of `useSigner`
 import { placeBet } from "../lib/contracts";
 import { GET_TOP_LIQUIDITY_MARKET } from "../lib/queries.js";
 
@@ -10,18 +10,12 @@ export default function Home() {
     const [signer, setSigner] = useState(null);
     const [betting, setBetting] = useState(false);
     const [market, setMarket] = useState(null);
-    const [clientReady, setClientReady] = useState(false);
 
-    // ✅ Ensure Apollo runs only on the client
-    useEffect(() => {
-        setClientReady(true);
-    }, []);
-
-    // ✅ Fetch signer properly using wagmi/core
+    // ✅ Fetch signer (wallet client) properly
     useEffect(() => {
         async function fetchSigner() {
+            if (!isConnected) return;
             try {
-                if (!isConnected) return;
                 const walletClient = await getWalletClient();
                 setSigner(walletClient);
             } catch (error) {
@@ -31,9 +25,10 @@ export default function Home() {
         fetchSigner();
     }, [isConnected]);
 
-    // ✅ Only run Apollo query on client to avoid SSR issues
+    // ✅ Apollo useQuery - Prevents Next.js SSR pre-render error
     const { data, loading, error } = useQuery(GET_TOP_LIQUIDITY_MARKET, { 
-        skip: !clientReady || !address // Prevents Next.js from running this on the server
+        skip: typeof window === "undefined" || !address,
+        ssr: false  // ✅ Ensures Apollo runs only on the client
     });
 
     // ✅ Set the betting market when data is available
@@ -59,8 +54,7 @@ export default function Home() {
         setBetting(false);
     }
 
-    // ✅ Prevent rendering if Apollo is still setting up
-    if (!clientReady) return <p>Loading...</p>;
+    // ✅ Display loading, error, or no market states
     if (loading) return <p>Loading daily bet...</p>;
     if (error) return <p>Error loading market data</p>;
     if (!market) return <p>No available betting markets</p>;
