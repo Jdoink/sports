@@ -1,54 +1,39 @@
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
-import { fetchTopLiquidityMarket } from "../lib/queries";
-import { placeBet } from "../lib/contracts";
 
 export default function Home() {
-    const { address, isConnected } = useAccount();
     const [market, setMarket] = useState(null);
-    const [betting, setBetting] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    // Fetch the market with highest liquidity
     useEffect(() => {
-        async function getMarket() {
+        async function fetchMarkets() {
             try {
-                const marketData = await fetchTopLiquidityMarket();
-                setMarket(marketData);
-            } catch (error) {
-                console.error("Failed to fetch market:", error);
+                const response = await fetch("https://api.thalesmarket.io/overtime/markets");
+                if (!response.ok) {
+                    throw new Error("Failed to fetch market data");
+                }
+                const data = await response.json();
+                setMarket(data[0]); // Get the first available market
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
             }
         }
-        getMarket();
+
+        fetchMarkets();
     }, []);
 
-    // Handle bet placement
-    async function handleBet(team) {
-        if (!isConnected) return alert("Connect your wallet first!");
-        if (!market) return alert("No market data available!");
-
-        setBetting(true);
-        try {
-            await placeBet(market.id, team, "1000000000000000", address);
-            alert("Bet placed successfully!");
-        } catch (error) {
-            console.error(error);
-            alert(`Bet failed: ${error.message}`);
-        }
-        setBetting(false);
-    }
-
-    if (!market) return <p>Loading market data...</p>;
+    if (loading) return <p>Loading daily bet...</p>;
+    if (error) return <p>Error: {error}</p>;
+    if (!market) return <p>No available betting markets</p>;
 
     return (
         <div>
             <h1>Today's Bet</h1>
             <p>Match: {market.homeTeam} vs {market.awayTeam}</p>
-            <button onClick={() => handleBet("home")} disabled={betting}>
-                Bet on {market.homeTeam}
-            </button>
-            <button onClick={() => handleBet("away")} disabled={betting}>
-                Bet on {market.awayTeam}
-            </button>
+            <button onClick={() => alert(`Bet placed on ${market.homeTeam}`)}>Bet on {market.homeTeam}</button>
+            <button onClick={() => alert(`Bet placed on ${market.awayTeam}`)}>Bet on {market.awayTeam}</button>
         </div>
     );
 }
