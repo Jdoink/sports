@@ -1,37 +1,33 @@
+import "../styles/globals.css";
+import "@rainbow-me/rainbowkit/styles.css";
+import { RainbowKitProvider, getDefaultWallets, getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { WagmiConfig, createConfig, configureChains } from "wagmi";
 import { mainnet, optimism } from "wagmi/chains";
 import { publicProvider } from "wagmi/providers/public";
-import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit";
-import "@rainbow-me/rainbowkit/styles.css";
 
-// Fix: Ensure WalletConnect is set up properly
-const { chains, publicClient } = configureChains(
-  [mainnet, optimism],
-  [publicProvider()]
-);
+// 🚀 Add your WalletConnect Project ID here
+const projectId = "f9c18b102a0363ba79fd2ad3bc8ba6f3";
 
+// Configure WalletConnect
+const { chains, publicClient } = configureChains([optimism], [publicProvider()]);
 const { connectors } = getDefaultWallets({
-  appName: "Sports Betting MVP",
-  projectId: "f9c18b102a0363ba79fd2ad3bc8ba6f3", // 🔥 Replace with your WalletConnect Project ID
-  chains,
+    appName: "Sports Betting MVP",
+    projectId,
+    chains,
 });
 
-// ✅ Fix: Create Wagmi client correctly
 const wagmiConfig = createConfig({
-  autoConnect: true,
-  connectors,
-  publicClient,
+    autoConnect: true,
+    connectors,
+    publicClient,
 });
 
-// ✅ Fix: Wrap the entire app with `WagmiConfig` and `RainbowKitProvider`
-function MyApp({ Component, pageProps }) {
-  return (
-    <WagmiConfig config={wagmiConfig}>
-      <RainbowKitProvider chains={chains}>
-        <Component {...pageProps} />
-      </RainbowKitProvider>
-    </WagmiConfig>
-  );
+export default function MyApp({ Component, pageProps }) {
+    return (
+        <WagmiConfig config={wagmiConfig}>
+            <RainbowKitProvider chains={chains}>
+                <Component {...pageProps} />
+            </RainbowKitProvider>
+        </WagmiConfig>
+    );
 }
-
-export default MyApp;
