@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { getSportsAmmContract, getUSDCContract } from "../lib/contracts";
 import { USDC_ADDRESS, SPORTS_AMM_V2_CONTRACT_ADDRESS } from "../lib/contracts";
-import { getTopLiquidityMarket } from "../lib/queries";
+import { getRandomMarket } from "../lib/queries";
 
 export default function Home() {
     const [provider, setProvider] = useState(null);
@@ -12,40 +12,38 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (window.ethereum) {
-            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-            setProvider(web3Provider);
+        async function initProvider() {
+            if (window.ethereum) {
+                const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+                setProvider(web3Provider);
+            } else {
+                console.error("Ethereum provider not found!");
+            }
         }
+        initProvider();
     }, []);
 
     useEffect(() => {
         async function fetchMarket() {
             if (!provider) {
-                console.warn("Provider not available yet, waiting...");
+                console.warn("Provider not available yet, retrying...");
                 return;
             }
-
+            
             setLoading(true);
             try {
-                const marketData = await getTopLiquidityMarket(provider);
-
-                if (!marketData) {
-                    console.warn("No valid market data received. Retrying...");
-                    setTimeout(fetchMarket, 3000); // Retry in 3 seconds
-                    return;
-                }
-
+                const marketData = await getRandomMarket();
+                if (!marketData) throw new Error("No valid market data received.");
                 setGameData(marketData);
                 console.log("Market Data Fetched:", marketData);
             } catch (error) {
                 console.error("Error fetching market:", error);
-                setGameData(null);
             } finally {
                 setLoading(false);
             }
         }
-
-        fetchMarket();
+        
+        if (provider) fetchMarket();
     }, [provider]);
 
     const connectWallet = async () => {
@@ -63,18 +61,18 @@ export default function Home() {
     };
 
     const handleBet = async (team) => {
-        if (!provider) {
-            alert("Wallet not connected!");
+        console.log("Bet function started...");
+
+        if (!provider || !gameData) {
+            alert("Missing provider or game data.");
             return;
         }
         if (!userAddress) {
             alert("Please connect your wallet first.");
             return;
         }
-        if (!gameData) {
-            alert("No market data available.");
-            return;
-        }
+
+        console.log("Provider detected, proceeding with bet...");
 
         let formattedGameId;
         try {
@@ -84,6 +82,8 @@ export default function Home() {
             alert("Invalid game ID format.");
             return;
         }
+
+        console.log("Formatted Game ID:", formattedGameId);
 
         const tradeData = {
             gameId: formattedGameId,
@@ -98,11 +98,14 @@ export default function Home() {
             combinedPositions: [false, false, false],
         };
 
+        console.log("Trade Data:", tradeData);
+
         try {
             const signer = provider.getSigner();
             const sportsAmmContract = getSportsAmmContract(signer);
             const usdcContract = getUSDCContract(signer);
 
+            console.log("Fetching trade quote...");
             const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
                 [tradeData],
                 ethers.utils.parseUnits(betAmount, 6),
@@ -110,21 +113,28 @@ export default function Home() {
                 false
             );
 
+            console.log("Expected Payout:", payout.toString());
+
             if (payout.eq(0)) {
                 alert("Invalid payout. Bet rejected.");
                 return;
             }
 
+            console.log("Checking USDC allowance...");
             const allowance = await usdcContract.allowance(userAddress, SPORTS_AMM_V2_CONTRACT_ADDRESS);
+            console.log("Current Allowance:", allowance.toString());
 
             if (allowance.lt(ethers.utils.parseUnits(betAmount, 6))) {
+                console.log("Approving USDC spending...");
                 const approveTx = await usdcContract.approve(
                     SPORTS_AMM_V2_CONTRACT_ADDRESS,
                     ethers.constants.MaxUint256
                 );
                 await approveTx.wait();
+                console.log("USDC Approved.");
             }
 
+            console.log("Placing bet...");
             const tx = await sportsAmmContract.trade(
                 [tradeData],
                 ethers.utils.parseUnits(betAmount, 6),
@@ -135,6 +145,7 @@ export default function Home() {
                 false
             );
 
+            console.log("Transaction Sent:", tx.hash);
             await tx.wait();
             alert("Bet successfully placed!");
 
