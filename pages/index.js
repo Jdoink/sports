@@ -12,15 +12,10 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function initProvider() {
-            if (window.ethereum) {
-                const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-                setProvider(web3Provider);
-            } else {
-                console.error("Ethereum provider not found!");
-            }
+        if (window.ethereum) {
+            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+            setProvider(web3Provider);
         }
-        initProvider();
     }, []);
 
     useEffect(() => {
@@ -29,20 +24,20 @@ export default function Home() {
                 console.warn("Provider not available yet, retrying...");
                 return;
             }
-            
+
             setLoading(true);
             try {
                 const marketData = await getRandomMarket();
                 if (!marketData) throw new Error("No valid market data received.");
                 setGameData(marketData);
-                console.log("Market Data Fetched:", marketData);
+                console.log("Market Data Fetched:", JSON.stringify(marketData, null, 2));
             } catch (error) {
                 console.error("Error fetching market:", error);
             } finally {
                 setLoading(false);
             }
         }
-        
+
         if (provider) fetchMarket();
     }, [provider]);
 
@@ -63,8 +58,8 @@ export default function Home() {
     const handleBet = async (team) => {
         console.log("Bet function started...");
 
-        if (!provider || !gameData) {
-            alert("Missing provider or game data.");
+        if (!provider) {
+            alert("Wallet not connected!");
             return;
         }
         if (!userAddress) {
@@ -76,7 +71,11 @@ export default function Home() {
 
         let formattedGameId;
         try {
-            formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
+            if (ethers.utils.isHexString(gameData.gameId, 32)) {
+                formattedGameId = gameData.gameId;
+            } else {
+                formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
+            }
         } catch (error) {
             console.error("Error formatting gameId:", error);
             alert("Invalid game ID format.");
@@ -177,6 +176,8 @@ export default function Home() {
                     />
                     <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
                     <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
+                    <h3>Debug Logs:</h3>
+                    <pre>{JSON.stringify(gameData, null, 2)}</pre>
                 </>
             ) : (
                 <p>Failed to load market data.</p>
