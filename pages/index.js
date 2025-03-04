@@ -1,22 +1,15 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { getSportsAmmContract, getUSDCContract } from "../lib/contracts";
+import { USDC_ADDRESS, SPORTS_AMM_V2_CONTRACT_ADDRESS } from "../lib/contracts";
+import { getRandomMarket } from "../lib/queries";
 
 export default function Home() {
     const [provider, setProvider] = useState(null);
     const [userAddress, setUserAddress] = useState("");
-    const [betAmount, setBetAmount] = useState("");
-    const [gameData, setGameData] = useState({
-        gameId: "0x345f463641383645323331423239000000000000000000000000000000000000", // Example game ID
-        homeTeam: "San Antonio Spurs",
-        awayTeam: "Brooklyn Nets",
-        sportId: 1,
-        typeId: 1,
-        maturity: Math.floor(Date.now() / 1000) + 86400, // 1 day later
-        status: 0,
-        line: 0,
-        odds: [150, -150],
-    });
+    const [betAmount, setBetAmount] = useState("5");
+    const [gameData, setGameData] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (window.ethereum) {
@@ -25,25 +18,63 @@ export default function Home() {
         }
     }, []);
 
+    useEffect(() => {
+        async function fetchMarket() {
+            setLoading(true);
+            try {
+                const marketData = await getRandomMarket();
+                setGameData(marketData);
+                console.log("Market Data Fetched:", marketData);
+            } catch (error) {
+                console.error("Error fetching market:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchMarket();
+    }, []);
+
     const connectWallet = async () => {
-        if (!window.ethereum) {
-            alert("Install MetaMask!");
+        if (!provider) {
+            alert("MetaMask not detected!");
             return;
         }
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const signer = web3Provider.getSigner();
-        setProvider(web3Provider);
-        setUserAddress(await signer.getAddress());
+        try {
+            const accounts = await provider.send("eth_requestAccounts", []);
+            setUserAddress(accounts[0]);
+            console.log("Connected Address:", accounts[0]);
+        } catch (error) {
+            console.error("Error connecting wallet:", error);
+        }
     };
 
     const handleBet = async (team) => {
-        if (!provider || !userAddress) {
+        console.log("Bet function started...");
+
+        if (!provider) {
+            alert("Wallet not connected!");
+            return;
+        }
+        if (!userAddress) {
             alert("Please connect your wallet first.");
             return;
         }
 
-        const formattedGameId = ethers.utils.formatBytes32String(gameData.gameId);
+        console.log("Provider detected, proceeding with bet...");
+
+        let formattedGameId;
+        try {
+            if (ethers.utils.isHexString(gameData.gameId, 32)) {
+                formattedGameId = gameData.gameId;
+            } else {
+                formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
+            }
+        } catch (error) {
+            console.error("Error formatting gameId:", error);
+            alert("Invalid game ID format.");
+            return;
+        }
+
         console.log("Formatted Game ID:", formattedGameId);
 
         const tradeData = {
@@ -54,17 +85,18 @@ export default function Home() {
             status: gameData.status,
             line: gameData.line,
             playerId: 0,
-            position: team === "home" ? 0 : 1, // 0 for home, 1 for away
+            position: team === "home" ? 0 : 1,
             odds: gameData.odds,
             combinedPositions: [false, false, false],
         };
 
         console.log("Trade Data:", tradeData);
 
-        const sportsAmmContract = getSportsAmmContract(provider);
-        const usdcContract = getUSDCContract(provider);
-
         try {
+            const signer = provider.getSigner();
+            const sportsAmmContract = getSportsAmmContract(signer);
+            const usdcContract = getUSDCContract(signer);
+
             console.log("Fetching trade quote...");
             const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
                 [tradeData],
@@ -76,7 +108,7 @@ export default function Home() {
             console.log("Expected Payout:", payout.toString());
 
             if (payout.eq(0)) {
-                console.error("Trade failed: Invalid payout.");
+                alert("Invalid payout. Bet rejected.");
                 return;
             }
 
@@ -107,10 +139,11 @@ export default function Home() {
 
             console.log("Transaction Sent:", tx.hash);
             await tx.wait();
-            console.log("Bet successfully placed!");
+            alert("Bet successfully placed!");
 
         } catch (error) {
             console.error("Error placing bet:", error);
+            alert("Bet failed. Check console for details.");
         }
     };
 
@@ -122,15 +155,26 @@ export default function Home() {
             ) : (
                 <button onClick={connectWallet}>Connect Wallet</button>
             )}
-            <h3>{gameData.homeTeam} vs {gameData.awayTeam}</h3>
-            <input
-                type="number"
-                value={betAmount}
-                onChange={(e) => setBetAmount(e.target.value)}
-                placeholder="Enter USDC amount"
-            />
-            <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
-            <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
+
+            {loading ? (
+                <p>Loading market data...</p>
+            ) : gameData ? (
+                <>
+                    <h2>{gameData.homeTeam} vs {gameData.awayTeam}</h2>
+                    <input
+                        type="number"
+                        value={betAmount}
+                        onChange={(e) => setBetAmount(e.target.value)}
+                        placeholder="Enter USDC Amount"
+                    />
+                    <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
+                    <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
+                    <h3>Debug Logs:</h3>
+                    <pre>{JSON.stringify(gameData, null, 2)}</pre>
+                </>
+            ) : (
+                <p>Failed to load market data.</p>
+            )}
         </div>
     );
 }
