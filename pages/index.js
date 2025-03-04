@@ -6,6 +6,7 @@ import { getRandomMarket } from "../lib/queries";
 
 export default function Home() {
     const [provider, setProvider] = useState(null);
+    const [signer, setSigner] = useState(null);
     const [userAddress, setUserAddress] = useState("");
     const [betAmount, setBetAmount] = useState("5");
     const [gameData, setGameData] = useState(null);
@@ -16,7 +17,13 @@ export default function Home() {
             if (window.ethereum) {
                 const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
                 await web3Provider.send("eth_requestAccounts", []); // Ensures accounts are accessible
+                const walletSigner = web3Provider.getSigner();
+                const address = await walletSigner.getAddress();
+
                 setProvider(web3Provider);
+                setSigner(walletSigner);
+                setUserAddress(address);
+                console.log("Connected Address:", address);
             } else {
                 console.warn("No Ethereum provider detected.");
             }
@@ -29,6 +36,7 @@ export default function Home() {
         async function fetchMarket() {
             setLoading(true);
             try {
+                if (!provider) throw new Error("Provider not available yet.");
                 const marketData = await getRandomMarket(provider);
                 if (!marketData) throw new Error("No valid market data received.");
                 setGameData(marketData);
@@ -52,9 +60,11 @@ export default function Home() {
         try {
             const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
             await web3Provider.send("eth_requestAccounts", []);
+            const walletSigner = web3Provider.getSigner();
+            const address = await walletSigner.getAddress();
+
             setProvider(web3Provider);
-            const signer = web3Provider.getSigner();
-            const address = await signer.getAddress();
+            setSigner(walletSigner);
             setUserAddress(address);
             console.log("Connected Address:", address);
         } catch (error) {
@@ -65,7 +75,7 @@ export default function Home() {
     const handleBet = async (team) => {
         console.log("Bet function started...");
 
-        if (!provider) {
+        if (!provider || !signer) {
             alert("Wallet not connected!");
             return;
         }
@@ -74,7 +84,7 @@ export default function Home() {
             return;
         }
 
-        console.log("Provider detected, proceeding with bet...");
+        console.log("Provider and Signer detected, proceeding with bet...");
 
         let formattedGameId;
         try {
@@ -107,7 +117,6 @@ export default function Home() {
         console.log("Trade Data:", tradeData);
 
         try {
-            const signer = provider.getSigner();
             const sportsAmmContract = getSportsAmmContract(signer);
             const usdcContract = getUSDCContract(signer);
 
