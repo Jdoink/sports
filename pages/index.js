@@ -1,30 +1,32 @@
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { placeBet } from "../lib/contracts";
 import { fetchNBAMarket } from "../lib/queries";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 
 export default function Home() {
     const { address, isConnected } = useAccount();
+    const { openConnectModal } = useConnectModal();
     const [market, setMarket] = useState(null);
     const [betting, setBetting] = useState(false);
 
-    // Fetch a single NBA market on load
     useEffect(() => {
         async function getMarket() {
-            console.log("Fetching NBA market...");
+            console.log("Fetching market...");
             const nbaMarket = await fetchNBAMarket();
             if (nbaMarket) {
+                console.log("Market received:", nbaMarket);
                 setMarket(nbaMarket);
-            } else {
-                console.warn("No NBA markets found.");
             }
         }
         getMarket();
     }, []);
 
     async function handleBet(team) {
-        if (!address) return alert("Connect your wallet first!");
+        if (!isConnected) {
+            openConnectModal();
+            return alert("Please connect your wallet first!");
+        }
         if (!market) return alert("No market data available!");
 
         setBetting(true);
@@ -41,14 +43,16 @@ export default function Home() {
     return (
         <div>
             <h1>NBA Betting</h1>
-
-            {/* Wallet Connect Button */}
-            <ConnectButton />
-
-            {/* Display Market Info or Loading Message */}
+            {!isConnected ? (
+                <button onClick={openConnectModal}>Connect Wallet</button>
+            ) : (
+                <p>Connected: {address}</p>
+            )}
+            
             {market ? (
                 <>
                     <p>{market.homeTeam} vs {market.awayTeam}</p>
+                    <p>Odds: {market.odds.join(", ")}</p>
                     <button onClick={() => handleBet("home")} disabled={betting}>
                         Bet on {market.homeTeam}
                     </button>
