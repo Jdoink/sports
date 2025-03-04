@@ -12,7 +12,7 @@ const { chains, publicClient } = configureChains(
 
 const { connectors } = getDefaultWallets({
   appName: "Sports Betting MVP",
-  projectId: "1234567890abcdef", // 🔥 Replace with your WalletConnect Project ID
+  projectId: "f9c18b102a0363ba79fd2ad3bc8ba6f3", // 🔥 Replace with your WalletConnect Project ID
   chains,
 });
 
