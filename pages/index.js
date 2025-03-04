@@ -9,6 +9,7 @@ export default function Home() {
     const { openConnectModal } = useConnectModal();
     const [market, setMarket] = useState(null);
     const [betting, setBetting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(null);
 
     useEffect(() => {
         async function getMarket() {
@@ -17,6 +18,8 @@ export default function Home() {
             if (nbaMarket) {
                 console.log("Market received:", nbaMarket);
                 setMarket(nbaMarket);
+            } else {
+                setErrorMessage("No NBA market found.");
             }
         }
         getMarket();
@@ -63,6 +66,13 @@ export default function Home() {
             ) : (
                 <p>Loading NBA market...</p>
             )}
+
+            {/* Debugging Section - REMOVE THIS ONCE FIXED */}
+            {errorMessage && <p style={{ color: 'red' }}>Error: {errorMessage}</p>}
+            <div style={{ backgroundColor: "#f4f4f4", padding: "10px", marginTop: "20px" }}>
+                <h3>Debug Logs:</h3>
+                <p>Market Data: {market ? JSON.stringify(market, null, 2) : "Loading..."}</p>
+            </div>
         </div>
     );
 }
