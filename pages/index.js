@@ -8,23 +8,18 @@ export default function Home() {
     const { address, isConnected } = useAccount();
     const [market, setMarket] = useState(null);
     const [betting, setBetting] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
 
-    // Fetch a single NBA market on load
+    // Fetch a single NBA Moneyline market on load
     useEffect(() => {
         async function getMarket() {
-            setLoading(true);
-            setError("");
-            console.log("Fetching market...");
-
+            console.log("Fetching NBA markets...");
             const nbaMarket = await fetchNBAMarket();
             if (nbaMarket) {
+                console.log("Market received:", nbaMarket);
                 setMarket(nbaMarket);
             } else {
-                setError("No NBA market found.");
+                console.error("No NBA market found.");
             }
-            setLoading(false);
         }
         getMarket();
     }, []);
@@ -33,10 +28,17 @@ export default function Home() {
         if (!address) return alert("Connect your wallet first!");
         if (!market) return alert("No market data available!");
 
+        const amount = prompt("Enter bet amount (e.g. 10):");
+        if (!amount || isNaN(amount)) return alert("Invalid amount");
+
+        const paymentMethod = confirm("Press OK to use USDC, Cancel to use ETH")
+            ? "USDC"
+            : "ETH";
+
         setBetting(true);
         try {
-            await placeBet(market.gameId, team, "1000000000000000", address);
-            alert("Bet placed successfully!");
+            await placeBet(market.gameId, team, amount, paymentMethod);
+            alert(`Bet placed successfully on ${team}!`);
         } catch (error) {
             console.error("Bet failed:", error);
             alert("Bet failed!");
@@ -48,16 +50,9 @@ export default function Home() {
         <div>
             <h1>NBA Betting</h1>
             <ConnectButton />
-
-            {loading ? (
-                <p>Loading NBA market...</p>
-            ) : error ? (
-                <p style={{ color: "red" }}>Error: {error}</p>
-            ) : (
+            {market ? (
                 <>
-                    <p>
-                        {market.homeTeam} vs {market.awayTeam}
-                    </p>
+                    <p>{market.homeTeam} vs {market.awayTeam}</p>
                     <button onClick={() => handleBet("home")} disabled={betting}>
                         Bet on {market.homeTeam}
                     </button>
@@ -65,11 +60,13 @@ export default function Home() {
                         Bet on {market.awayTeam}
                     </button>
                 </>
+            ) : (
+                <p style={{ color: "red" }}>Error: No NBA market found.</p>
             )}
-
-            <div style={{ marginTop: "20px", padding: "10px", border: "1px solid gray" }}>
+            <br />
+            <div style={{ marginTop: "20px", padding: "10px", border: "1px solid black" }}>
                 <h3>Debug Logs:</h3>
-                <p>Market Data: {loading ? "Loading..." : market ? JSON.stringify(market) : "No data"}</p>
+                <p>Market Data: {market ? JSON.stringify(market) : "Loading..."}</p>
             </div>
         </div>
     );
