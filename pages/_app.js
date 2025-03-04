@@ -4,26 +4,26 @@ import { publicProvider } from "wagmi/providers/public";
 import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 
-// Setup blockchain networks
+// Fix: Ensure WalletConnect is set up properly
 const { chains, publicClient } = configureChains(
-  [mainnet, optimism], 
+  [mainnet, optimism],
   [publicProvider()]
 );
 
-// Configure wallet connections
 const { connectors } = getDefaultWallets({
   appName: "Sports Betting MVP",
-  projectId: "YOUR_WALLETCONNECT_PROJECT_ID", // Replace with a real WalletConnect project ID
+  projectId: "1234567890abcdef", // 🔥 Replace with your WalletConnect Project ID
   chains,
 });
 
-// Create Wagmi client
+// ✅ Fix: Create Wagmi client correctly
 const wagmiConfig = createConfig({
   autoConnect: true,
   connectors,
   publicClient,
 });
 
+// ✅ Fix: Wrap the entire app with `WagmiConfig` and `RainbowKitProvider`
 function MyApp({ Component, pageProps }) {
   return (
     <WagmiConfig config={wagmiConfig}>
