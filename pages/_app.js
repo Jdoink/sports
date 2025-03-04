@@ -1,28 +1,29 @@
-import "../styles/globals.css";
-import "@rainbow-me/rainbowkit/styles.css";
-import { RainbowKitProvider, getDefaultWallets, getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { WagmiConfig, createConfig, configureChains } from "wagmi";
 import { mainnet, optimism } from "wagmi/chains";
 import { publicProvider } from "wagmi/providers/public";
+import { getDefaultWallets, RainbowKitProvider } from "@rainbow-me/rainbowkit";
+import "@rainbow-me/rainbowkit/styles.css";
 
-// 🚀 Add your WalletConnect Project ID here
-const projectId = "f9c18b102a0363ba79fd2ad3bc8ba6f3";
+// Configure supported chains (Optimism & Ethereum mainnet)
+const { chains, publicClient } = configureChains(
+    [optimism, mainnet], 
+    [publicProvider()]
+);
 
-// Configure WalletConnect
-const { chains, publicClient } = configureChains([optimism], [publicProvider()]);
+// Configure Wallet Connect
 const { connectors } = getDefaultWallets({
-    appName: "Sports Betting MVP",
-    projectId,
-    chains,
+    appName: "Sports Betting App",
+    projectId: "f9c18b102a0363ba79fd2ad3bc8ba6f3", // Your WalletConnect project ID
+    chains
 });
 
 const wagmiConfig = createConfig({
     autoConnect: true,
     connectors,
-    publicClient,
+    publicClient
 });
 
-export default function MyApp({ Component, pageProps }) {
+function MyApp({ Component, pageProps }) {
     return (
         <WagmiConfig config={wagmiConfig}>
             <RainbowKitProvider chains={chains}>
@@ -31,3 +32,5 @@ export default function MyApp({ Component, pageProps }) {
         </WagmiConfig>
     );
 }
+
+export default MyApp;
