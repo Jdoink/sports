@@ -4,21 +4,19 @@ import { placeBet } from "../lib/contracts";
 import { fetchNBAMarket } from "../lib/queries";
 import dynamic from "next/dynamic";
 
-// Dynamically import WalletConnectButton to prevent SSR issues
+// Dynamically import the WalletConnectButton to prevent SSR crashes
 const WalletConnectButton = dynamic(() => import("../components/WalletConnectButton"), { ssr: false });
 
 export default function Home() {
     const { address, isConnected } = useAccount();
     const [market, setMarket] = useState(null);
     const [betting, setBetting] = useState(false);
-    const [isClient, setIsClient] = useState(false); // Prevent SSR issues
+    const [isClient, setIsClient] = useState(false); // Ensures client-side rendering
 
-    // Ensure this runs only on the client-side
     useEffect(() => {
-        setIsClient(true);
+        setIsClient(true); // Runs only in the browser
     }, []);
 
-    // Fetch a single NBA market on load
     useEffect(() => {
         async function getMarket() {
             try {
@@ -38,6 +36,7 @@ export default function Home() {
     }, []);
 
     async function handleBet(team) {
+        if (!isClient) return; // Ensure it's running on the client
         if (!address) return alert("Connect your wallet first!");
         if (!market) return alert("No market data available!");
 
@@ -52,12 +51,12 @@ export default function Home() {
         setBetting(false);
     }
 
-    if (!isClient) return <p>Loading...</p>; // Prevent SSR errors
+    if (!isClient) return <p>Loading...</p>; // Prevents `window` errors during SSR
 
     return (
         <div>
             <h1>NBA Betting</h1>
-            <WalletConnectButton /> {/* This works properly now */}
+            <WalletConnectButton /> {/* Now dynamically imported */}
 
             {market ? (
                 <div>
