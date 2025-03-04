@@ -12,44 +12,51 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (window.ethereum) {
-            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-            setProvider(web3Provider);
+        async function initializeProvider() {
+            if (window.ethereum) {
+                const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+                await web3Provider.send("eth_requestAccounts", []); // Ensures accounts are accessible
+                setProvider(web3Provider);
+            } else {
+                console.warn("No Ethereum provider detected.");
+            }
         }
+
+        initializeProvider();
     }, []);
 
     useEffect(() => {
         async function fetchMarket() {
-            if (!provider) {
-                console.warn("Provider not available yet, retrying...");
-                return;
-            }
-
             setLoading(true);
             try {
-                const marketData = await getRandomMarket();
+                const marketData = await getRandomMarket(provider);
                 if (!marketData) throw new Error("No valid market data received.");
                 setGameData(marketData);
-                console.log("Market Data Fetched:", JSON.stringify(marketData, null, 2));
+                console.log("Market Data Fetched:", marketData);
             } catch (error) {
                 console.error("Error fetching market:", error);
             } finally {
                 setLoading(false);
             }
         }
-
-        if (provider) fetchMarket();
+        if (provider) {
+            fetchMarket();
+        }
     }, [provider]);
 
     const connectWallet = async () => {
-        if (!provider) {
+        if (!window.ethereum) {
             alert("MetaMask not detected!");
             return;
         }
         try {
-            const accounts = await provider.send("eth_requestAccounts", []);
-            setUserAddress(accounts[0]);
-            console.log("Connected Address:", accounts[0]);
+            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+            await web3Provider.send("eth_requestAccounts", []);
+            setProvider(web3Provider);
+            const signer = web3Provider.getSigner();
+            const address = await signer.getAddress();
+            setUserAddress(address);
+            console.log("Connected Address:", address);
         } catch (error) {
             console.error("Error connecting wallet:", error);
         }
