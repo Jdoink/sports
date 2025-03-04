@@ -67,3 +67,10 @@ export default function Home() {
                 </>
             )}
 
+            <div style={{ marginTop: "20px", padding: "10px", border: "1px solid gray" }}>
+                <h3>Debug Logs:</h3>
+                <p>Market Data: {loading ? "Loading..." : market ? JSON.stringify(market) : "No data"}</p>
+            </div>
+        </div>
+    );
+}
