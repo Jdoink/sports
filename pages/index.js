@@ -22,17 +22,29 @@ export default function Home() {
         async function fetchMarket() {
             setLoading(true);
             try {
-                const marketData = await getRandomMarket();
-                setGameData(marketData);
-                console.log("Market Data Fetched:", marketData);
+                if (!provider) {
+                    console.warn("Provider not available yet, waiting...");
+                    return;
+                }
+
+                const marketData = await getRandomMarket(provider);
+
+                if (!marketData) {
+                    console.warn("No valid market data received.");
+                    setGameData(null);
+                } else {
+                    setGameData(marketData);
+                    console.log("Market Data Fetched:", marketData);
+                }
             } catch (error) {
                 console.error("Error fetching market:", error);
+                setGameData(null);
             } finally {
                 setLoading(false);
             }
         }
         fetchMarket();
-    }, []);
+    }, [provider]);
 
     const connectWallet = async () => {
         if (!provider) {
@@ -57,6 +69,10 @@ export default function Home() {
         }
         if (!userAddress) {
             alert("Please connect your wallet first.");
+            return;
+        }
+        if (!gameData) {
+            alert("No market data available.");
             return;
         }
 
@@ -169,8 +185,6 @@ export default function Home() {
                     />
                     <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
                     <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
-                    <h3>Debug Logs:</h3>
-                    <pre>{JSON.stringify(gameData, null, 2)}</pre>
                 </>
             ) : (
                 <p>Failed to load market data.</p>
