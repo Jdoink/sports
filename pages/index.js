@@ -1,110 +1,136 @@
-import { useState, useEffect } from "react";
-import { useAccount, useContractWrite, usePrepareContractWrite } from "wagmi";
-import { fetchNBAMarket } from "../lib/queries";
-import dynamic from "next/dynamic";
+import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-
-// ✅ Dynamically import WalletConnectButton to prevent SSR crash
-const WalletConnectButton = dynamic(() => import("../components/WalletConnectButton"), { ssr: false });
-
-const USDC_ADDRESS = "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"; // ✅ Replace with the actual USDC contract address
-const SPORTS_AMM_V2_CONTRACT_ADDRESS = "0xFb4e4811C7A811E098A556bD79B64c20b479E431"; // ✅ Replace with actual AMM contract address
+import { getSportsAmmContract, getUSDCContract } from "../lib/contracts";
 
 export default function Home() {
-    const { address, isConnected } = useAccount();
-    const [market, setMarket] = useState(null);
+    const [provider, setProvider] = useState(null);
+    const [userAddress, setUserAddress] = useState("");
     const [betAmount, setBetAmount] = useState("");
-    const [selectedTeam, setSelectedTeam] = useState(null);
-    const [isClient, setIsClient] = useState(false);
+    const [gameData, setGameData] = useState({
+        gameId: "0x345f463641383645323331423239000000000000000000000000000000000000", // Example game ID
+        homeTeam: "San Antonio Spurs",
+        awayTeam: "Brooklyn Nets",
+        sportId: 1,
+        typeId: 1,
+        maturity: Math.floor(Date.now() / 1000) + 86400, // 1 day later
+        status: 0,
+        line: 0,
+        odds: [150, -150],
+    });
 
-    // ✅ Ensure this only runs in the browser
     useEffect(() => {
-        setIsClient(true);
+        if (window.ethereum) {
+            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+            setProvider(web3Provider);
+        }
     }, []);
 
-    useEffect(() => {
-        if (!isClient) return; // Prevents SSR crash
-        async function loadMarket() {
-            try {
-                const nbaMarket = await fetchNBAMarket();
-                if (nbaMarket) {
-                    setMarket(nbaMarket);
-                } else {
-                    console.error("No NBA market found.");
-                }
-            } catch (error) {
-                console.error("Error fetching market:", error);
-            }
+    const connectWallet = async () => {
+        if (!window.ethereum) {
+            alert("Install MetaMask!");
+            return;
         }
-        loadMarket();
-    }, [isClient]);
+        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        const signer = web3Provider.getSigner();
+        setProvider(web3Provider);
+        setUserAddress(await signer.getAddress());
+    };
 
     const handleBet = async (team) => {
-        if (!betAmount || isNaN(betAmount) || betAmount <= 0) {
-            alert("Enter a valid USDC amount to bet.");
+        if (!provider || !userAddress) {
+            alert("Please connect your wallet first.");
             return;
         }
 
-        setSelectedTeam(team);
+        const formattedGameId = ethers.utils.formatBytes32String(gameData.gameId);
+        console.log("Formatted Game ID:", formattedGameId);
+
+        const tradeData = {
+            gameId: formattedGameId,
+            sportId: gameData.sportId,
+            typeId: gameData.typeId,
+            maturity: gameData.maturity,
+            status: gameData.status,
+            line: gameData.line,
+            playerId: 0,
+            position: team === "home" ? 0 : 1, // 0 for home, 1 for away
+            odds: gameData.odds,
+            combinedPositions: [false, false, false],
+        };
+
+        console.log("Trade Data:", tradeData);
+
+        const sportsAmmContract = getSportsAmmContract(provider);
+        const usdcContract = getUSDCContract(provider);
 
         try {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
+            console.log("Fetching trade quote...");
+            const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
+                [tradeData],
+                ethers.utils.parseUnits(betAmount, 6),
+                USDC_ADDRESS,
+                false
+            );
 
-            // ✅ Get USDC Contract
-            const usdcContract = new ethers.Contract(USDC_ADDRESS, [
-                "function approve(address spender, uint256 amount) public returns (bool)"
-            ], signer);
+            console.log("Expected Payout:", payout.toString());
 
-            // ✅ Approve USDC transfer
-            const amountInWei = ethers.utils.parseUnits(betAmount, 6); // USDC has 6 decimals
-            const approveTx = await usdcContract.approve(SPORTS_AMM_V2_CONTRACT_ADDRESS, amountInWei);
-            await approveTx.wait();
+            if (payout.eq(0)) {
+                console.error("Trade failed: Invalid payout.");
+                return;
+            }
 
-            // ✅ Call Sports AMM contract
-            const sportsAMMContract = new ethers.Contract(SPORTS_AMM_V2_CONTRACT_ADDRESS, [
-                "function trade(uint256 marketId, uint256 position, uint256 amount) public"
-            ], signer);
+            console.log("Checking USDC allowance...");
+            const allowance = await usdcContract.allowance(userAddress, SPORTS_AMM_V2_CONTRACT_ADDRESS);
+            console.log("Current Allowance:", allowance.toString());
 
-            const position = team === "home" ? 0 : 1; // 0 = home, 1 = away
-            const tradeTx = await sportsAMMContract.trade(market.gameId, position, amountInWei);
-            await tradeTx.wait();
+            if (allowance.lt(ethers.utils.parseUnits(betAmount, 6))) {
+                console.log("Approving USDC spending...");
+                const approveTx = await usdcContract.approve(
+                    SPORTS_AMM_V2_CONTRACT_ADDRESS,
+                    ethers.constants.MaxUint256
+                );
+                await approveTx.wait();
+                console.log("USDC Approved.");
+            }
 
-            alert(`Bet placed on ${team === "home" ? market.homeTeam : market.awayTeam} for ${betAmount} USDC!`);
+            console.log("Placing bet...");
+            const tx = await sportsAmmContract.trade(
+                [tradeData],
+                ethers.utils.parseUnits(betAmount, 6),
+                payout,
+                ethers.utils.parseUnits("0.01", 18),
+                ethers.constants.AddressZero,
+                USDC_ADDRESS,
+                false
+            );
+
+            console.log("Transaction Sent:", tx.hash);
+            await tx.wait();
+            console.log("Bet successfully placed!");
+
         } catch (error) {
-            console.error("Betting error:", error);
-            alert("Transaction failed.");
+            console.error("Error placing bet:", error);
         }
     };
-
-    if (!isClient) return <p>Loading...</p>;
 
     return (
         <div>
             <h1>NBA Betting</h1>
-            <WalletConnectButton />
-
-            {market ? (
-                <div>
-                    <p>{market.homeTeam} vs {market.awayTeam}</p>
-                    <input
-                        type="number"
-                        placeholder="Enter USDC amount"
-                        value={betAmount}
-                        onChange={(e) => setBetAmount(e.target.value)}
-                        style={{ marginRight: "10px" }}
-                    />
-                    <button onClick={() => handleBet("home")}>Bet on {market.homeTeam}</button>
-                    <button onClick={() => handleBet("away")}>Bet on {market.awayTeam}</button>
-                </div>
+            {userAddress ? (
+                <p>Connected: {userAddress}</p>
             ) : (
-                <p style={{ color: "red" }}>No NBA market found.</p>
+                <button onClick={connectWallet}>Connect Wallet</button>
             )}
-
-            <div style={{ marginTop: "20px", border: "1px solid #000", padding: "10px" }}>
-                <h3>Debug Logs:</h3>
-                <p>Market Data: {market ? JSON.stringify(market) : "Loading..."}</p>
-            </div>
+            <h3>{gameData.homeTeam} vs {gameData.awayTeam}</h3>
+            <input
+                type="number"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                placeholder="Enter USDC amount"
+            />
+            <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
+            <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
         </div>
     );
 }
