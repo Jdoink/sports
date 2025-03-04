@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { placeBet } from "../lib/contracts";
 import { fetchNBAMarket } from "../lib/queries";
-import dynamic from "next/dynamic"; // <-- Important for Client-Side Components
+import dynamic from "next/dynamic"; // Ensure components are loaded client-side
 
-// Ensure client-side components are dynamically imported
+// Import WalletConnectButton dynamically to prevent server-side issues
 const WalletConnectButton = dynamic(() => import("../components/WalletConnectButton"), { ssr: false });
 
 export default function Home() {
@@ -12,7 +12,6 @@ export default function Home() {
     const [market, setMarket] = useState(null);
     const [betting, setBetting] = useState(false);
 
-    // Fetch a single NBA market on load
     useEffect(() => {
         async function getMarket() {
             try {
@@ -49,7 +48,7 @@ export default function Home() {
     return (
         <div>
             <h1>NBA Betting</h1>
-            <WalletConnectButton /> {/* Ensure wallet connection component loads properly */}
+            <WalletConnectButton /> {/* Now correctly imports */}
             
             {market ? (
                 <div>
