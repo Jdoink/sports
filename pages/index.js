@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { getSportsAmmContract, getUSDCContract } from "../lib/contracts";
 import { USDC_ADDRESS, SPORTS_AMM_V2_CONTRACT_ADDRESS } from "../lib/contracts";
-import { getRandomMarket } from "../lib/queries";
+import { getTopMarket } from "../lib/queries";
 
 export default function Home() {
     const [provider, setProvider] = useState(null);
@@ -13,60 +13,43 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function initializeProvider() {
-            if (window.ethereum) {
-                const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-                await web3Provider.send("eth_requestAccounts", []); // Ensures accounts are accessible
-                const walletSigner = web3Provider.getSigner();
-                const address = await walletSigner.getAddress();
-
-                setProvider(web3Provider);
-                setSigner(walletSigner);
-                setUserAddress(address);
-                console.log("Connected Address:", address);
-            } else {
-                console.warn("No Ethereum provider detected.");
-            }
+        if (window.ethereum) {
+            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+            setProvider(web3Provider);
         }
-
-        initializeProvider();
     }, []);
 
     useEffect(() => {
         async function fetchMarket() {
             setLoading(true);
             try {
-                if (!provider) throw new Error("Provider not available yet.");
-                const marketData = await getRandomMarket(provider);
-                if (!marketData) throw new Error("No valid market data received.");
-                setGameData(marketData);
-                console.log("Market Data Fetched:", marketData);
+                const marketData = await getTopMarket();
+                if (!marketData) {
+                    console.error("No valid market data received.");
+                    setGameData(null);
+                } else {
+                    setGameData(marketData);
+                    console.log("Market Data Fetched:", marketData);
+                }
             } catch (error) {
                 console.error("Error fetching market:", error);
             } finally {
                 setLoading(false);
             }
         }
-        if (provider) {
-            fetchMarket();
-        }
-    }, [provider]);
+        fetchMarket();
+    }, []);
 
     const connectWallet = async () => {
-        if (!window.ethereum) {
+        if (!provider) {
             alert("MetaMask not detected!");
             return;
         }
         try {
-            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-            await web3Provider.send("eth_requestAccounts", []);
-            const walletSigner = web3Provider.getSigner();
-            const address = await walletSigner.getAddress();
-
-            setProvider(web3Provider);
-            setSigner(walletSigner);
-            setUserAddress(address);
-            console.log("Connected Address:", address);
+            const accounts = await provider.send("eth_requestAccounts", []);
+            setUserAddress(accounts[0]);
+            setSigner(provider.getSigner());
+            console.log("Connected Address:", accounts[0]);
         } catch (error) {
             console.error("Error connecting wallet:", error);
         }
@@ -75,24 +58,16 @@ export default function Home() {
     const handleBet = async (team) => {
         console.log("Bet function started...");
 
-        if (!provider || !signer) {
-            alert("Wallet not connected!");
-            return;
-        }
-        if (!userAddress) {
-            alert("Please connect your wallet first.");
+        if (!signer) {
+            alert("Wallet not connected or signer unavailable!");
             return;
         }
 
-        console.log("Provider and Signer detected, proceeding with bet...");
+        console.log("Signer detected, proceeding with bet...");
 
         let formattedGameId;
         try {
-            if (ethers.utils.isHexString(gameData.gameId, 32)) {
-                formattedGameId = gameData.gameId;
-            } else {
-                formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
-            }
+            formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
         } catch (error) {
             console.error("Error formatting gameId:", error);
             alert("Invalid game ID format.");
@@ -192,11 +167,9 @@ export default function Home() {
                     />
                     <button onClick={() => handleBet("home")}>Bet on {gameData.homeTeam}</button>
                     <button onClick={() => handleBet("away")}>Bet on {gameData.awayTeam}</button>
-                    <h3>Debug Logs:</h3>
-                    <pre>{JSON.stringify(gameData, null, 2)}</pre>
                 </>
             ) : (
-                <p>Failed to load market data.</p>
+                <p>No active markets available.</p>
             )}
         </div>
     );
