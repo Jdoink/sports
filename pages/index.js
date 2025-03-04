@@ -1,75 +1,53 @@
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
-import { placeBet } from "../lib/contracts";
 import { fetchNBAMarket } from "../lib/queries";
 import dynamic from "next/dynamic";
 
-// Dynamically import the WalletConnectButton to prevent SSR crashes
+// ✅ Dynamically import to prevent server crash
 const WalletConnectButton = dynamic(() => import("../components/WalletConnectButton"), { ssr: false });
 
 export default function Home() {
     const { address, isConnected } = useAccount();
     const [market, setMarket] = useState(null);
-    const [betting, setBetting] = useState(false);
-    const [isClient, setIsClient] = useState(false); // Ensures client-side rendering
+    const [isClient, setIsClient] = useState(false);
 
+    // ✅ Ensure this only runs on the browser
     useEffect(() => {
-        setIsClient(true); // Runs only in the browser
+        setIsClient(true);
     }, []);
 
     useEffect(() => {
-        async function getMarket() {
+        if (!isClient) return; // Prevents SSR crash
+        async function loadMarket() {
             try {
-                console.log("Fetching market...");
                 const nbaMarket = await fetchNBAMarket();
                 if (nbaMarket) {
-                    console.log("Market received:", nbaMarket);
                     setMarket(nbaMarket);
                 } else {
-                    console.log("No NBA market found.");
+                    console.error("No NBA market found.");
                 }
             } catch (error) {
                 console.error("Error fetching market:", error);
             }
         }
-        getMarket();
-    }, []);
+        loadMarket();
+    }, [isClient]);
 
-    async function handleBet(team) {
-        if (!isClient) return; // Ensure it's running on the client
-        if (!address) return alert("Connect your wallet first!");
-        if (!market) return alert("No market data available!");
-
-        setBetting(true);
-        try {
-            await placeBet(market.gameId, team, "1000000000000000", address);
-            alert("Bet placed successfully!");
-        } catch (error) {
-            console.error("Bet failed:", error);
-            alert("Bet failed!");
-        }
-        setBetting(false);
-    }
-
-    if (!isClient) return <p>Loading...</p>; // Prevents `window` errors during SSR
+    if (!isClient) return <p>Loading...</p>; // Prevents `window` errors
 
     return (
         <div>
             <h1>NBA Betting</h1>
-            <WalletConnectButton /> {/* Now dynamically imported */}
+            <WalletConnectButton />
 
             {market ? (
                 <div>
                     <p>{market.homeTeam} vs {market.awayTeam}</p>
-                    <button onClick={() => handleBet("home")} disabled={betting}>
-                        Bet on {market.homeTeam}
-                    </button>
-                    <button onClick={() => handleBet("away")} disabled={betting}>
-                        Bet on {market.awayTeam}
-                    </button>
+                    <button onClick={() => alert("Bet on Home Team")}>Bet on {market.homeTeam}</button>
+                    <button onClick={() => alert("Bet on Away Team")}>Bet on {market.awayTeam}</button>
                 </div>
             ) : (
-                <p style={{ color: "red" }}>Error: No NBA market found.</p>
+                <p style={{ color: "red" }}>No NBA market found.</p>
             )}
 
             <div style={{ marginTop: "20px", border: "1px solid #000", padding: "10px" }}>
