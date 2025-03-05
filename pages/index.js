@@ -1,99 +1,54 @@
 import { useEffect, useState } from "react";
-import { getTradeQuote, placeBet } from "../lib/contracts"; // Uses correct contracts
-import WalletConnectButton from "../components/WalletConnectButton";
+import { fetchLatestNBAGame } from "../lib/fetchNBA";
+import { getTradeQuote } from "../lib/contracts";
+import { useWeb3React } from "@web3-react/core";
 
-const SportsBetting = () => {
-  const [selectedGame, setSelectedGame] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function Home() {
+  const { library } = useWeb3React();
+  const [game, setGame] = useState(null);
   const [buyInAmount, setBuyInAmount] = useState("");
 
   useEffect(() => {
-    (async function fetchNBA() {
-      try {
-        console.log("Fetching NBA games...");
-        const response = await fetch(
-          "https://api.thalesmarket.io/overtime/markets?network=10&sportId=4"
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("API Response:", data);
-
-        if (data.length > 0) {
-          const randomGame = data[Math.floor(Math.random() * data.length)]; // ✅ Selects a random NBA game
-          setSelectedGame(randomGame);
-        } else {
-          console.warn("No NBA games found!");
-        }
-      } catch (error) {
-        console.error("Error fetching NBA game:", error);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    const loadGame = async () => {
+      const nbaGame = await fetchLatestNBAGame();
+      if (nbaGame) setGame(nbaGame);
+    };
+    loadGame();
   }, []);
 
   const handleGetQuote = async () => {
-    if (!selectedGame || !buyInAmount) {
+    if (!game || !buyInAmount) {
       alert("Please wait for a game to load and enter a buy-in amount.");
       return;
     }
 
     try {
-      const quote = await getTradeQuote(selectedGame, buyInAmount);
+      const quote = await getTradeQuote(library.getSigner(), game, buyInAmount);
       console.log("Trade Quote:", quote);
     } catch (error) {
       console.error("Error fetching trade quote:", error);
     }
   };
 
-  const handlePlaceBet = async () => {
-    if (!selectedGame || !buyInAmount) {
-      alert("Please enter a buy-in amount.");
-      return;
-    }
-
-    try {
-      const betResult = await placeBet(selectedGame, buyInAmount);
-      console.log("Bet Placed:", betResult);
-      alert("Bet successfully placed!");
-    } catch (error) {
-      console.error("Error placing bet:", error);
-      alert("Failed to place bet.");
-    }
-  };
-
   return (
     <div>
       <h1>Sports Betting</h1>
-      <WalletConnectButton />
-
-      {loading ? (
-        <p>Loading an NBA game...</p>
-      ) : selectedGame ? (
+      {game ? (
         <div>
-          <h2>Selected NBA Game</h2>
-          <p>Game ID: {selectedGame.gameId}</p>
-          <p>Maturity: {new Date(selectedGame.maturity * 1000).toLocaleString()}</p>
-          <p>Odds: {selectedGame.odds.join(" | ")}</p>
-
-          <h3>Buy-In Amount</h3>
+          <h2>{game.homeTeam} vs {game.awayTeam}</h2>
+          <p>Start Time: {new Date(game.maturityDate).toLocaleString()}</p>
+          <p>Odds: {game.odds.map(o => ` ${o.decimal}`).join(", ")}</p>
           <input
             type="number"
             value={buyInAmount}
             onChange={(e) => setBuyInAmount(e.target.value)}
+            placeholder="Enter Buy-In Amount"
           />
           <button onClick={handleGetQuote}>Get Quote</button>
-          <button onClick={handlePlaceBet}>Place Bet</button>
         </div>
       ) : (
-        <p>No NBA games available.</p>
+        <p>Loading latest NBA game...</p>
       )}
     </div>
   );
-};
-
-export default SportsBetting;
+}
