@@ -13,13 +13,23 @@ export default function Home() {
   useEffect(() => {
     async function fetchLatestNBA() {
       try {
+        console.log("Fetching latest NBA game...");
+
         const response = await fetch(
-          "https://api.overtimemarkets.xyz/overtime-v2/networks/10/games?sportId=4"
+          "https://api.thalesmarket.io/overtime/markets?network=10&sportId=4"
         );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
         const data = await response.json();
-        
-        if (data && data.length > 0) {
+        console.log("API Response:", data);
+
+        if (data.length > 0) {
           setSelectedGame(data[0]); // Select the latest NBA game
+        } else {
+          console.warn("No NBA games found!");
         }
       } catch (error) {
         console.error("Error fetching NBA game:", error);
@@ -78,7 +88,7 @@ export default function Home() {
       <WalletConnectButton setProvider={setProvider} setSigner={setSigner} />
       {selectedGame ? (
         <>
-          <h2>{selectedGame.teamA} vs {selectedGame.teamB}</h2>
+          <h2>{selectedGame.homeTeam} vs {selectedGame.awayTeam}</h2>
           <label>Buy-In Amount</label>
           <input 
             type="text" 
