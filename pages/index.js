@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { getTradeQuote, placeBet } from "../lib/contracts";
 import WalletConnectButton from "../components/WalletConnectButton";
@@ -6,75 +6,92 @@ import WalletConnectButton from "../components/WalletConnectButton";
 export default function Home() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [marketData, setMarketData] = useState([]);
-  const [selectedMarket, setSelectedMarket] = useState(null);
+  const [selectedGame, setSelectedGame] = useState(null);
   const [buyInAmount, setBuyInAmount] = useState("");
   const [quote, setQuote] = useState(null);
-
+  
   useEffect(() => {
-    if (window.ethereum) {
-      const newProvider = new ethers.providers.Web3Provider(window.ethereum);
-      setProvider(newProvider);
-      setSigner(newProvider.getSigner());
+    async function fetchLatestNBA() {
+      try {
+        const response = await fetch(
+          "https://api.overtimemarkets.xyz/overtime-v2/networks/10/games?sportId=4"
+        );
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          setSelectedGame(data[0]); // Select the latest NBA game
+        }
+      } catch (error) {
+        console.error("Error fetching NBA game:", error);
+      }
     }
+
+    fetchLatestNBA();
   }, []);
 
-  const fetchQuote = async () => {
-    if (!selectedMarket || !buyInAmount) return;
-    const tradeData = [
-      {
-        gameId: selectedMarket.id,
-        sportId: 4,
-        typeId: 0,
-        maturity: selectedMarket.maturity,
-        status: "open",
-        odds: selectedMarket.odds,
-        position: 0,
-        combinedPositions: [false, false, false]
-      }
-    ];
-    const quoteResult = await getTradeQuote(provider, tradeData, ethers.utils.parseUnits(buyInAmount, 18));
-    setQuote(quoteResult);
-  };
+  async function handleGetQuote() {
+    if (!provider || !selectedGame || !buyInAmount) return;
 
-  const handleBet = async () => {
-    if (!signer || !quote) return;
     const tradeData = [
       {
-        gameId: selectedMarket.id,
+        gameId: selectedGame.gameId,
         sportId: 4,
         typeId: 0,
-        maturity: selectedMarket.maturity,
-        status: "open",
-        odds: selectedMarket.odds,
+        maturity: selectedGame.maturity,
+        status: selectedGame.status,
+        line: selectedGame.line,
+        playerId: 0,
         position: 0,
-        combinedPositions: [false, false, false]
-      }
+        odds: selectedGame.odds,
+        combinedPositions: [[1], [1]],
+      },
     ];
-    await placeBet(signer, tradeData, ethers.utils.parseUnits(buyInAmount, 18), quote.totalQuote);
-  };
+
+    const quoteData = await getTradeQuote(provider, tradeData, ethers.utils.parseUnits(buyInAmount, 6));
+    setQuote(quoteData);
+  }
+
+  async function handlePlaceBet() {
+    if (!signer || !selectedGame || !quote || !buyInAmount) return;
+
+    const tradeData = [
+      {
+        gameId: selectedGame.gameId,
+        sportId: 4,
+        typeId: 0,
+        maturity: selectedGame.maturity,
+        status: selectedGame.status,
+        line: selectedGame.line,
+        playerId: 0,
+        position: 0,
+        odds: selectedGame.odds,
+        combinedPositions: [[1], [1]],
+      },
+    ];
+
+    await placeBet(signer, tradeData, ethers.utils.parseUnits(buyInAmount, 6), quote.totalQuote);
+  }
 
   return (
     <div>
       <h1>Sports Betting</h1>
       <WalletConnectButton setProvider={setProvider} setSigner={setSigner} />
-
-      <h2>Select a Market</h2>
-      <select onChange={(e) => setSelectedMarket(marketData[e.target.value])}>
-        {marketData.map((market, index) => (
-          <option key={market.id} value={index}>
-            {market.homeTeam} vs {market.awayTeam}
-          </option>
-        ))}
-      </select>
-
-      <h2>Buy-In Amount</h2>
-      <input type="text" value={buyInAmount} onChange={(e) => setBuyInAmount(e.target.value)} />
-
-      <button onClick={fetchQuote}>Get Quote</button>
-      {quote && <p>Expected Payout: {quote.payout}</p>}
-
-      <button onClick={handleBet}>Place Bet</button>
+      {selectedGame ? (
+        <>
+          <h2>{selectedGame.teamA} vs {selectedGame.teamB}</h2>
+          <label>Buy-In Amount</label>
+          <input 
+            type="text" 
+            value={buyInAmount} 
+            onChange={(e) => setBuyInAmount(e.target.value)} 
+          />
+          <button onClick={handleGetQuote}>Get Quote</button>
+          <button onClick={handlePlaceBet}>Place Bet</button>
+          {quote && <p>Quote: {quote.totalQuote}</p>}
+        </>
+      ) : (
+        <p>Loading latest NBA game...</p>
+      )}
     </div>
   );
 }
