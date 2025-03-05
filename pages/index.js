@@ -47,11 +47,19 @@ export default function Home() {
         }
         try {
             const accounts = await provider.send("eth_requestAccounts", []);
+            if (!accounts.length) {
+                throw new Error("No accounts found. User might have rejected the connection.");
+            }
+
             setUserAddress(accounts[0]);
-            setSigner(provider.getSigner());
+            const signerInstance = provider.getSigner();
+            setSigner(signerInstance);
+
             console.log("Connected Address:", accounts[0]);
+            console.log("Signer assigned:", signerInstance);
         } catch (error) {
             console.error("Error connecting wallet:", error);
+            alert("Failed to connect wallet.");
         }
     };
 
@@ -59,11 +67,19 @@ export default function Home() {
         console.log("Bet function started...");
 
         if (!signer) {
-            alert("Wallet not connected or signer unavailable!");
+            alert("Wallet not connected! Please connect your wallet.");
+            console.error("Error: Signer is not available");
             return;
         }
 
         console.log("Signer detected, proceeding with bet...");
+
+        // Check if gameData is valid
+        if (!gameData || !gameData.gameId) {
+            console.error("Error: Invalid game data", gameData);
+            alert("No valid market data found. Try refreshing the page.");
+            return;
+        }
 
         let formattedGameId;
         try {
@@ -78,14 +94,14 @@ export default function Home() {
 
         const tradeData = {
             gameId: formattedGameId,
-            sportId: gameData.sportId,
-            typeId: gameData.typeId,
-            maturity: gameData.maturity,
-            status: gameData.status,
-            line: gameData.line,
+            sportId: gameData.sportId || "",
+            typeId: gameData.typeId || "",
+            maturity: gameData.maturity || 0,
+            status: gameData.status || "",
+            line: gameData.line || "",
             playerId: 0,
             position: team === "home" ? 0 : 1,
-            odds: gameData.odds,
+            odds: gameData.odds || [],
             combinedPositions: [false, false, false],
         };
 
