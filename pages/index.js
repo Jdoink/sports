@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import axios from "axios";
 import { getSportsAmmContract, getUSDCContract } from "../lib/contracts";
 import { USDC_ADDRESS, SPORTS_AMM_V2_CONTRACT_ADDRESS } from "../lib/contracts";
 import { getTopMarket } from "../lib/queries";
@@ -46,11 +47,10 @@ export default function Home() {
             return;
         }
         try {
-            await provider.send("eth_requestAccounts", []);
-            const newSigner = provider.getSigner();
-            setSigner(newSigner);
-            setUserAddress(await newSigner.getAddress());
-            console.log("Connected Address:", await newSigner.getAddress());
+            const accounts = await provider.send("eth_requestAccounts", []);
+            setUserAddress(accounts[0]);
+            setSigner(provider.getSigner());
+            console.log("Connected Address:", accounts[0]);
         } catch (error) {
             console.error("Error connecting wallet:", error);
         }
@@ -72,44 +72,68 @@ export default function Home() {
             return;
         }
 
-        console.log("Raw Game ID:", gameData.gameId);
-        const formattedGameId = gameData.gameId.startsWith("0x") ? gameData.gameId : ethers.utils.keccak256(ethers.utils.toUtf8Bytes(gameData.gameId));
+        let formattedGameId;
+        try {
+            formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
+        } catch (error) {
+            console.error("Error formatting gameId:", error);
+            alert("Invalid game ID format.");
+            return;
+        }
 
         console.log("Formatted Game ID:", formattedGameId);
 
-        const tradeData = {
-            gameId: formattedGameId,
-            sportId: gameData.sportId || 4,
-            typeId: gameData.typeId || 0,
-            maturity: gameData.maturity || 0,
-            status: gameData.status || "open",
-            line: gameData.line || "N/A",
-            playerId: 0,
-            position: team === "home" ? 0 : 1,
-            odds: gameData.odds.map((odd) => odd.decimal),
-            combinedPositions: [false, false, false],
-        };
+        const tradeData = [
+            {
+                gameId: formattedGameId,
+                sportId: gameData.sportId || 4, // Default to basketball if missing
+                typeId: gameData.typeId || 0, // Ensure a valid typeId is set
+                maturity: gameData.maturity || 0,
+                status: gameData.status || "open",
+                line: gameData.line || 0,
+                playerId: 0,
+                position: team === "home" ? 0 : 1,
+                odds: gameData.odds.map((odd) => odd.normalizedImplied), // Use normalized implied odds
+                combinedPositions: [false, false, false],
+            },
+        ];
 
         console.log("Trade Data:", tradeData);
 
         try {
-            const sportsAmmContract = await getSportsAmmContract(signer);
-            const usdcContract = await getUSDCContract(signer);
-
-            console.log("Fetching trade quote...");
-            const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
-                [tradeData],
-                ethers.utils.parseUnits(betAmount, 6),
-                USDC_ADDRESS,
-                false
+            // Fetch quote from Overtime V2 API
+            console.log("Fetching trade quote from API...");
+            const quoteResponse = await axios.post(
+                `https://overtimemarketsv2.xyz/overtime-v2/networks/10/quote`,
+                {
+                    buyInAmount: parseFloat(betAmount),
+                    tradeData: tradeData,
+                    collateral: "USDC",
+                }
             );
 
+            const quoteData = quoteResponse.data;
+            console.log("Quote Data:", quoteData);
+
+            if (!quoteData.quoteData || !quoteData.quoteData.totalQuote || !quoteData.quoteData.payout) {
+                console.error("Invalid quote response:", quoteData);
+                alert("Failed to fetch valid quote. Please try again.");
+                return;
+            }
+
+            const totalQuote = ethers.utils.parseEther(quoteData.quoteData.totalQuote.decimal.toString());
+            const payout = ethers.utils.parseEther(quoteData.quoteData.payout.usd.toString());
+
+            console.log("Total Quote:", totalQuote.toString());
             console.log("Expected Payout:", payout.toString());
 
             if (payout.eq(0)) {
                 alert("Invalid payout. Bet rejected.");
                 return;
             }
+
+            const sportsAmmContract = getSportsAmmContract(signer);
+            const usdcContract = getUSDCContract(signer);
 
             console.log("Checking USDC allowance...");
             const allowance = await usdcContract.allowance(userAddress, SPORTS_AMM_V2_CONTRACT_ADDRESS);
@@ -127,11 +151,11 @@ export default function Home() {
 
             console.log("Placing bet...");
             const tx = await sportsAmmContract.trade(
-                [tradeData],
+                tradeData,
                 ethers.utils.parseUnits(betAmount, 6),
-                payout,
-                ethers.utils.parseUnits("0.01", 18),
-                ethers.constants.AddressZero,
+                totalQuote,
+                ethers.utils.parseUnits("0.01", 18), // 1% slippage tolerance
+                ethers.constants.AddressZero, // No referral
                 USDC_ADDRESS,
                 false
             );
