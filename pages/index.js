@@ -47,19 +47,11 @@ export default function Home() {
         }
         try {
             const accounts = await provider.send("eth_requestAccounts", []);
-            if (!accounts.length) {
-                throw new Error("No accounts found. User might have rejected the connection.");
-            }
-
             setUserAddress(accounts[0]);
-            const signerInstance = provider.getSigner();
-            setSigner(signerInstance);
-
+            setSigner(provider.getSigner());
             console.log("Connected Address:", accounts[0]);
-            console.log("Signer assigned:", signerInstance);
         } catch (error) {
             console.error("Error connecting wallet:", error);
-            alert("Failed to connect wallet.");
         }
     };
 
@@ -67,17 +59,15 @@ export default function Home() {
         console.log("Bet function started...");
 
         if (!signer) {
-            alert("Wallet not connected! Please connect your wallet.");
-            console.error("Error: Signer is not available");
+            alert("Wallet not connected or signer unavailable!");
             return;
         }
 
         console.log("Signer detected, proceeding with bet...");
 
-        // Check if gameData is valid
-        if (!gameData || !gameData.gameId) {
-            console.error("Error: Invalid game data", gameData);
-            alert("No valid market data found. Try refreshing the page.");
+        if (!gameData || !gameData.gameId || !gameData.odds || gameData.odds.length === 0) {
+            console.error("Invalid game data:", gameData);
+            alert("Invalid game data. Please try again later.");
             return;
         }
 
@@ -94,14 +84,14 @@ export default function Home() {
 
         const tradeData = {
             gameId: formattedGameId,
-            sportId: gameData.sportId || "",
-            typeId: gameData.typeId || "",
+            sportId: gameData.sportId || 4, // Default to basketball if missing
+            typeId: gameData.typeId || 0, // Ensure a valid typeId is set
             maturity: gameData.maturity || 0,
-            status: gameData.status || "",
-            line: gameData.line || "",
+            status: gameData.status || "open",
+            line: gameData.line || "N/A",
             playerId: 0,
             position: team === "home" ? 0 : 1,
-            odds: gameData.odds || [],
+            odds: gameData.odds.map((odd) => odd.decimal), // Extract decimal odds
             combinedPositions: [false, false, false],
         };
 
