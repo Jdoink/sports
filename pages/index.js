@@ -1,72 +1,80 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import axios from "axios";
-import sportsAMMV2ContractAbi from "../lib/sportsAMMV2ContractAbi";
-import { getNBAQuote } from "../lib/queries"; // ✅ Ensure correct path
-
-const SPORTS_AMM_V2_CONTRACT = "0xFb4e4811C7A811E098A556bD79B64c20b479E431";
-const NETWORK_ID = 10;
-const API_URL = "https://overtimemarketsv2.xyz";
+import { getTradeQuote, placeBet } from "../lib/contracts";
+import WalletConnectButton from "../components/WalletConnectButton";
 
 export default function Home() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [market, setMarket] = useState(null);
-  const [betAmount, setBetAmount] = useState(5);
-  
+  const [marketData, setMarketData] = useState([]);
+  const [selectedMarket, setSelectedMarket] = useState(null);
+  const [buyInAmount, setBuyInAmount] = useState("");
+  const [quote, setQuote] = useState(null);
+
   useEffect(() => {
     if (window.ethereum) {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      setProvider(provider);
-      setSigner(provider.getSigner());
-      setContract(new ethers.Contract(SPORTS_AMM_V2_CONTRACT, sportsAMMV2ContractAbi, provider.getSigner()));
+      const newProvider = new ethers.providers.Web3Provider(window.ethereum);
+      setProvider(newProvider);
+      setSigner(newProvider.getSigner());
     }
   }, []);
 
-  const fetchMarket = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/overtime-v2/networks/${NETWORK_ID}/markets?sport=basketball`);
-      setMarket(response.data[0]); // ✅ Ensure NBA game selection
-    } catch (error) {
-      console.error("Error fetching NBA markets:", error);
-    }
+  const fetchQuote = async () => {
+    if (!selectedMarket || !buyInAmount) return;
+    const tradeData = [
+      {
+        gameId: selectedMarket.id,
+        sportId: 4,
+        typeId: 0,
+        maturity: selectedMarket.maturity,
+        status: "open",
+        odds: selectedMarket.odds,
+        position: 0,
+        combinedPositions: [false, false, false]
+      }
+    ];
+    const quoteResult = await getTradeQuote(provider, tradeData, ethers.utils.parseUnits(buyInAmount, 18));
+    setQuote(quoteResult);
   };
 
-  const placeBet = async (position) => {
-    if (!signer || !market) return;
-
-    try {
-      console.log("Fetching trade quote...");
-      const tradeData = await getNBAQuote(market, betAmount);
-      
-      console.log("Quote Data:", tradeData);
-
-      const tx = await contract.trade(
-        tradeData.gameId,
-        position,
-        ethers.utils.parseUnits(betAmount.toString(), 18)
-      );
-      
-      await tx.wait();
-      console.log("Bet placed successfully:", tx.hash);
-    } catch (error) {
-      console.error("Error placing bet:", error);
-    }
+  const handleBet = async () => {
+    if (!signer || !quote) return;
+    const tradeData = [
+      {
+        gameId: selectedMarket.id,
+        sportId: 4,
+        typeId: 0,
+        maturity: selectedMarket.maturity,
+        status: "open",
+        odds: selectedMarket.odds,
+        position: 0,
+        combinedPositions: [false, false, false]
+      }
+    ];
+    await placeBet(signer, tradeData, ethers.utils.parseUnits(buyInAmount, 18), quote.totalQuote);
   };
 
   return (
     <div>
-      <h1>NBA Betting</h1>
-      <button onClick={fetchMarket}>Fetch NBA Game</button>
-      {market && <h2>{market.homeTeam} vs {market.awayTeam}</h2>}
-      <input type="number" value={betAmount} onChange={(e) => setBetAmount(e.target.value)} />
-      {market && (
-        <>
-          <button onClick={() => placeBet(1)}>Bet on {market.homeTeam}</button>
-          <button onClick={() => placeBet(2)}>Bet on {market.awayTeam}</button>
-        </>
-      )}
+      <h1>Sports Betting</h1>
+      <WalletConnectButton setProvider={setProvider} setSigner={setSigner} />
+
+      <h2>Select a Market</h2>
+      <select onChange={(e) => setSelectedMarket(marketData[e.target.value])}>
+        {marketData.map((market, index) => (
+          <option key={market.id} value={index}>
+            {market.homeTeam} vs {market.awayTeam}
+          </option>
+        ))}
+      </select>
+
+      <h2>Buy-In Amount</h2>
+      <input type="text" value={buyInAmount} onChange={(e) => setBuyInAmount(e.target.value)} />
+
+      <button onClick={fetchQuote}>Get Quote</button>
+      {quote && <p>Expected Payout: {quote.payout}</p>}
+
+      <button onClick={handleBet}>Place Bet</button>
     </div>
   );
 }
