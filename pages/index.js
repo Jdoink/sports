@@ -14,7 +14,7 @@ export default function Home() {
 
     useEffect(() => {
         if (window.ethereum) {
-            const web3Provider = new ethers.BrowserProvider(window.ethereum);
+            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
             setProvider(web3Provider);
         }
     }, []);
@@ -46,10 +46,11 @@ export default function Home() {
             return;
         }
         try {
-            const accounts = await provider.send("eth_requestAccounts", []);
-            setUserAddress(accounts[0]);
-            setSigner(await provider.getSigner());
-            console.log("Connected Address:", accounts[0]);
+            await provider.send("eth_requestAccounts", []);
+            const newSigner = provider.getSigner();
+            setSigner(newSigner);
+            setUserAddress(await newSigner.getAddress());
+            console.log("Connected Address:", await newSigner.getAddress());
         } catch (error) {
             console.error("Error connecting wallet:", error);
         }
@@ -72,13 +73,13 @@ export default function Home() {
         }
 
         console.log("Raw Game ID:", gameData.gameId);
-        const formattedGameId = gameData.gameId.startsWith("0x") ? gameData.gameId : ethers.keccak256(ethers.toUtf8Bytes(gameData.gameId));
+        const formattedGameId = gameData.gameId.startsWith("0x") ? gameData.gameId : ethers.utils.keccak256(ethers.utils.toUtf8Bytes(gameData.gameId));
 
         console.log("Formatted Game ID:", formattedGameId);
 
         const tradeData = {
             gameId: formattedGameId,
-            sportId: gameData.sportId || 4, // Default sportId
+            sportId: gameData.sportId || 4,
             typeId: gameData.typeId || 0,
             maturity: gameData.maturity || 0,
             status: gameData.status || "open",
@@ -98,7 +99,7 @@ export default function Home() {
             console.log("Fetching trade quote...");
             const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
                 [tradeData],
-                ethers.parseUnits(betAmount, 6),
+                ethers.utils.parseUnits(betAmount, 6),
                 USDC_ADDRESS,
                 false
             );
@@ -114,11 +115,11 @@ export default function Home() {
             const allowance = await usdcContract.allowance(userAddress, SPORTS_AMM_V2_CONTRACT_ADDRESS);
             console.log("Current Allowance:", allowance.toString());
 
-            if (allowance.lt(ethers.parseUnits(betAmount, 6))) {
+            if (allowance.lt(ethers.utils.parseUnits(betAmount, 6))) {
                 console.log("Approving USDC spending...");
                 const approveTx = await usdcContract.approve(
                     SPORTS_AMM_V2_CONTRACT_ADDRESS,
-                    ethers.MaxUint256
+                    ethers.constants.MaxUint256
                 );
                 await approveTx.wait();
                 console.log("USDC Approved.");
@@ -127,10 +128,10 @@ export default function Home() {
             console.log("Placing bet...");
             const tx = await sportsAmmContract.trade(
                 [tradeData],
-                ethers.parseUnits(betAmount, 6),
+                ethers.utils.parseUnits(betAmount, 6),
                 payout,
-                ethers.parseUnits("0.01", 18),
-                ethers.ZeroAddress,
+                ethers.utils.parseUnits("0.01", 18),
+                ethers.constants.AddressZero,
                 USDC_ADDRESS,
                 false
             );
