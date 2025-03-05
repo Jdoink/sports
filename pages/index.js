@@ -14,7 +14,7 @@ export default function Home() {
 
     useEffect(() => {
         if (window.ethereum) {
-            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+            const web3Provider = new ethers.BrowserProvider(window.ethereum);
             setProvider(web3Provider);
         }
     }, []);
@@ -48,7 +48,7 @@ export default function Home() {
         try {
             const accounts = await provider.send("eth_requestAccounts", []);
             setUserAddress(accounts[0]);
-            setSigner(provider.getSigner());
+            setSigner(await provider.getSigner());
             console.log("Connected Address:", accounts[0]);
         } catch (error) {
             console.error("Error connecting wallet:", error);
@@ -71,40 +71,34 @@ export default function Home() {
             return;
         }
 
-        let formattedGameId;
-        try {
-            formattedGameId = ethers.utils.hexlify(ethers.utils.toUtf8Bytes(gameData.gameId)).slice(0, 66);
-        } catch (error) {
-            console.error("Error formatting gameId:", error);
-            alert("Invalid game ID format.");
-            return;
-        }
+        console.log("Raw Game ID:", gameData.gameId);
+        const formattedGameId = gameData.gameId.startsWith("0x") ? gameData.gameId : ethers.keccak256(ethers.toUtf8Bytes(gameData.gameId));
 
         console.log("Formatted Game ID:", formattedGameId);
 
         const tradeData = {
             gameId: formattedGameId,
-            sportId: gameData.sportId || 4, // Default to basketball if missing
-            typeId: gameData.typeId || 0, // Ensure a valid typeId is set
+            sportId: gameData.sportId || 4, // Default sportId
+            typeId: gameData.typeId || 0,
             maturity: gameData.maturity || 0,
             status: gameData.status || "open",
             line: gameData.line || "N/A",
             playerId: 0,
             position: team === "home" ? 0 : 1,
-            odds: gameData.odds.map((odd) => odd.decimal), // Extract decimal odds
+            odds: gameData.odds.map((odd) => odd.decimal),
             combinedPositions: [false, false, false],
         };
 
         console.log("Trade Data:", tradeData);
 
         try {
-            const sportsAmmContract = getSportsAmmContract(signer);
-            const usdcContract = getUSDCContract(signer);
+            const sportsAmmContract = await getSportsAmmContract(signer);
+            const usdcContract = await getUSDCContract(signer);
 
             console.log("Fetching trade quote...");
             const [totalQuote, payout] = await sportsAmmContract.tradeQuote(
                 [tradeData],
-                ethers.utils.parseUnits(betAmount, 6),
+                ethers.parseUnits(betAmount, 6),
                 USDC_ADDRESS,
                 false
             );
@@ -120,11 +114,11 @@ export default function Home() {
             const allowance = await usdcContract.allowance(userAddress, SPORTS_AMM_V2_CONTRACT_ADDRESS);
             console.log("Current Allowance:", allowance.toString());
 
-            if (allowance.lt(ethers.utils.parseUnits(betAmount, 6))) {
+            if (allowance.lt(ethers.parseUnits(betAmount, 6))) {
                 console.log("Approving USDC spending...");
                 const approveTx = await usdcContract.approve(
                     SPORTS_AMM_V2_CONTRACT_ADDRESS,
-                    ethers.constants.MaxUint256
+                    ethers.MaxUint256
                 );
                 await approveTx.wait();
                 console.log("USDC Approved.");
@@ -133,10 +127,10 @@ export default function Home() {
             console.log("Placing bet...");
             const tx = await sportsAmmContract.trade(
                 [tradeData],
-                ethers.utils.parseUnits(betAmount, 6),
+                ethers.parseUnits(betAmount, 6),
                 payout,
-                ethers.utils.parseUnits("0.01", 18),
-                ethers.constants.AddressZero,
+                ethers.parseUnits("0.01", 18),
+                ethers.ZeroAddress,
                 USDC_ADDRESS,
                 false
             );
